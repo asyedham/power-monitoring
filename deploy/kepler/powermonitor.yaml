@@ -1,0 +1,30 @@
+# PowerMonitor name is required to be power-monitor (operator webhook).
+# Kepler DaemonSet + ServiceMonitor land in namespace power-monitor.
+apiVersion: kepler.system.sustainable.computing.io/v1alpha1
+kind: PowerMonitor
+metadata:
+  name: power-monitor
+  labels:
+    app.kubernetes.io/name: powermonitor
+    app.kubernetes.io/instance: powermonitor
+    app.kubernetes.io/part-of: kepler-operator
+spec:
+  kepler:
+    config:
+      logLevel: info
+      metricLevels:
+        - node
+        - pod
+        - vm
+      sampleRate: 5s
+      staleness: 500ms
+      maxTerminated: 500
+    deployment:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists
+      security:
+        mode: rbac
+        allowedSANames:
+          - openshift-user-workload-monitoring:prometheus-user-workload

@@ -1,0 +1,78 @@
+---
+# Persist Grafana on the StorageClass set in group_vars (grafana_storage_class).
+# Runs on every install, including when Grafana already exists.
+
+- name: Look up Grafana deployment for PVC attach
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: grafana
+    namespace: "{{ grafana_ns }}"
+  register: grafana_deploy_for_pvc
+  failed_when: false
+
+- name: Persist Grafana on specified StorageClass
+  when:
+    - grafana_storage_class | default('') | length > 0
+    - grafana_deploy_for_pvc.resources | default([]) | length > 0
+  block:
+    - name: Create Grafana PVC
+      kubernetes.core.k8s:
+        state: present
+        apply: true
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: grafana-data
+            namespace: "{{ grafana_ns }}"
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: "{{ grafana_pvc_size | default('2Gi') }}"
+            storageClassName: "{{ grafana_storage_class }}"
+
+    - name: Attach Grafana PVC in place of emptyDir
+      ansible.builtin.command:
+        argv:
+          - oc
+          - set
+          - volume
+          - deploy/grafana
+          - -n
+          - "{{ grafana_ns }}"
+          - --add
+          - --overwrite
+          - --name=grafana-data
+          - --type=pvc
+          - --claim-name=grafana-data
+      register: grafana_set_volume
+      changed_when: grafana_set_volume.rc == 0
+
+    - name: Wait for Grafana rollout after PVC attach
+      ansible.builtin.command:
+        argv:
+          - oc
+          - rollout
+          - status
+          - deploy/grafana
+          - -n
+          - "{{ grafana_ns }}"
+          - "--timeout={{ grafana_wait_timeout }}s"
+      changed_when: false
+      failed_when: false
+
+    - name: Show Grafana PVC
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: PersistentVolumeClaim
+        name: grafana-data
+        namespace: "{{ grafana_ns }}"
+      register: grafana_pvc
+
+    - name: Report Grafana persistence
+      ansible.builtin.debug:
+        msg: >-
+          Grafana PVC grafana-data uses storageClass={{ grafana_storage_class }}
+          phase={{ grafana_pvc.resources[0].status.phase | default('unknown') }}.

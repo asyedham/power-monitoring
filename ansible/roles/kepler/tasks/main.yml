@@ -1,0 +1,144 @@
+---
+- name: Subscribe to Kepler Operator (community catalog)
+  kubernetes.core.k8s:
+    state: present
+    apply: true
+    src: "{{ project_root }}/deploy/kepler/subscription.yaml"
+
+- name: Wait for Kepler Operator CSV to succeed
+  ansible.builtin.command:
+    argv: ["oc", "get", "csv", "-n", "openshift-operators"]
+  register: kepler_csv
+  changed_when: false
+  until: kepler_csv.stdout is search('kepler') and kepler_csv.stdout is search('Succeeded')
+  retries: 60
+  delay: 5
+
+- name: Set Kepler UWM scrape token TTL to 365 days
+  kepler_uwm_token_ttl:
+    ttl: "{{ kepler_uwm_token_ttl }}"
+    skip_recreate: true
+    operator_namespace: "{{ kepler_operator_namespace }}"
+    kubeconfig: "{{ kubeconfig }}"
+  register: kepler_ttl_patch
+
+- name: Apply PowerMonitor (RAPL + virt-launcher / VM metrics)
+  kubernetes.core.k8s:
+    state: present
+    apply: true
+    src: "{{ project_root }}/deploy/kepler/powermonitor.yaml"
+
+- name: Wait for power-monitor namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: power-monitor
+  register: kepler_ns
+  until: kepler_ns.resources | default([]) | length > 0
+  retries: 36
+  delay: 5
+
+- name: Allow user-workload Prometheus to read Kepler scrape token and CA
+  kubernetes.core.k8s:
+    state: present
+    apply: true
+    src: "{{ project_root }}/deploy/kepler/uwm-scrape-rbac.yaml"
+
+- name: Enable Kepler Redfish when BMC credentials exist
+  when:
+    - (bmc_user | default('')) | length > 0
+    - (bmc_password | default('')) | length > 0
+    - (redfish_docs | default({})).count | default(0) | int > 0
+  block:
+    - name: Create Redfish enable ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        apply: true
+        src: "{{ project_root }}/deploy/kepler/enable-redfish.yaml"
+
+    - name: Create Redfish BMC secret
+      kubernetes.core.k8s:
+        state: present
+        apply: true
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: redfish-secret
+            namespace: power-monitor
+          type: Opaque
+          stringData:
+            redfish.yaml: "{{ redfish_docs.yaml }}"
+            redfish.csv: "{{ redfish_docs.csv }}"
+      register: redfish_secret
+      failed_when: false
+      no_log: "{{ not (debug_secrets | bool) }}"
+
+    - name: Fail if Redfish BMC secret was not applied
+      ansible.builtin.fail:
+        msg: >-
+          Failed to create Secret redfish-secret in namespace power-monitor
+          (status={{ redfish_secret.status | default('n/a') }}).
+          Check that namespace power-monitor exists and kubeconfig is valid.
+          Re-run with -e debug_secrets=true on a private terminal to see the API error.
+      when: redfish_secret.failed | default(false)
+
+    - name: Mount Redfish secret and ConfigMap on PowerMonitor
+      kubernetes.core.k8s:
+        state: patched
+        api_version: kepler.system.sustainable.computing.io/v1alpha1
+        kind: PowerMonitor
+        name: power-monitor
+        definition:
+          spec:
+            kepler:
+              config:
+                additionalConfigMaps:
+                  - name: enable-redfish
+              deployment:
+                secrets:
+                  - name: redfish-secret
+                    mountPath: /etc/kepler/secrets/redfish
+                    readOnly: true
+
+- name: Note RAPL-only when BMC map is missing
+  ansible.builtin.debug:
+    msg: >-
+      Kepler Redfish (kepler_platform_watts) is off. RAPL and virt-launcher
+      attribution still run. Set lab and lab_cloud so the bmc role can
+      download ocpinventory and enable platform watts.
+  when: >-
+    (bmc_user | default('')) | length == 0
+    or (bmc_password | default('')) | length == 0
+    or (redfish_docs | default({})).count | default(0) | int == 0
+
+- name: Recreate UWM scrape token with configured TTL
+  kepler_uwm_token_ttl:
+    ttl: "{{ kepler_uwm_token_ttl }}"
+    skip_recreate: false
+    operator_namespace: "{{ kepler_operator_namespace }}"
+    kubeconfig: "{{ kubeconfig }}"
+  register: kepler_token_recreate
+
+- name: Wait for Kepler DaemonSet
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: DaemonSet
+    namespace: power-monitor
+  register: kepler_ds
+  until: >-
+    kepler_ds.resources | default([]) | length > 0
+    and (kepler_ds.resources[0].status.numberReady | default(0) | int)
+        == (kepler_ds.resources[0].status.desiredNumberScheduled | default(0) | int)
+    and (kepler_ds.resources[0].status.desiredNumberScheduled | default(0) | int) > 0
+  retries: "{{ (kepler_wait_timeout | int / 5) | int }}"
+  delay: 5
+  failed_when: false
+
+- name: Warn if Kepler DaemonSet is not ready
+  ansible.builtin.debug:
+    msg: Kepler DaemonSet in namespace power-monitor is not fully rolled out yet
+  when: >-
+    kepler_ds.resources | default([]) | length == 0
+    or (kepler_ds.resources[0].status.numberReady | default(0) | int)
+       != (kepler_ds.resources[0].status.desiredNumberScheduled | default(0) | int)

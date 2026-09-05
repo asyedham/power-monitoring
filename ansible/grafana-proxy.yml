@@ -1,0 +1,70 @@
+---
+# Reverse-proxy Grafana to this host as http://<hostname>:<port>/
+#
+#   ansible-playbook ansible/grafana-proxy.yml
+#   ansible-playbook ansible/grafana-proxy.yml -e grafana_proxy_host=$(hostname -f) -e grafana_proxy_port=3000
+#
+# Then open http://<hostname>:<port>/ (OpenShift Virt / OpenShift Virtualization Power Monitoring Dashboard).
+
+- name: Proxy Grafana to hostname:port
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - kubernetes.core
+  module_defaults:
+    kubernetes.core.k8s:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+    kubernetes.core.k8s_info:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig if kubeconfig | length > 0 else lookup('env', 'KUBECONFIG') }}"
+  tasks:
+    - name: Require oc
+      ansible.builtin.command: oc whoami
+      changed_when: false
+
+    - name: Require Grafana service
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Service
+        name: grafana
+        namespace: "{{ grafana_ns }}"
+      register: grafana_svc
+      failed_when: grafana_svc.resources | default([]) | length == 0
+
+    - name: Apply Grafana reverse-proxy env
+      ansible.builtin.include_role:
+        name: grafana
+        tasks_from: proxy.yml
+
+    - name: Set Grafana admin password from group_vars
+      ansible.builtin.include_role:
+        name: grafana
+        tasks_from: admin.yml
+
+    - name: Expose Grafana on hostname:port
+      ansible.builtin.include_role:
+        name: grafana
+        tasks_from: portforward.yml
+
+    - name: Open Grafana in the local browser
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -m
+          - webbrowser
+          - -t
+          - "{{ grafana_root_url }}"
+      changed_when: true
+      failed_when: false
+      when: grafana_proxy_open_browser | bool
+
+    - name: Show proxy URL
+      ansible.builtin.debug:
+        msg: |
+          Grafana is proxied at {{ grafana_root_url }}
+          Open http://{{ grafana_proxy_host }}:{{ grafana_proxy_port }}/ in your browser
+          (dashboard OpenShift Virt / OpenShift Virtualization Power Monitoring Dashboard).
+          Login: {{ grafana_admin_user }} / {{ grafana_admin_password }}
+          (grafana_admin_user and grafana_admin_password in group_vars/all.yml).
+          Stop with: kill $(pgrep -f 'oc port-forward .*svc/grafana')

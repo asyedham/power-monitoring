@@ -1,0 +1,40 @@
+---
+# Bind Grafana svc/grafana:3000 on this host so http://<fqdn>:<port>/ works.
+
+- name: Check whether Grafana proxy port is already open
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - -c
+      - import socket; s=socket.socket(); s.settimeout(1); r=s.connect_ex(('127.0.0.1', {{ grafana_proxy_port | int }})); s.close(); raise SystemExit(r)
+  register: grafana_proxy_port_open
+  changed_when: false
+  failed_when: false
+
+- name: Start oc port-forward for Grafana
+  ansible.builtin.command:
+    argv:
+      - oc
+      - port-forward
+      - -n
+      - "{{ grafana_ns }}"
+      - "--address={{ grafana_proxy_bind }}"
+      - svc/grafana
+      - "{{ grafana_proxy_port }}:3000"
+  environment:
+    KUBECONFIG: "{{ kubeconfig if kubeconfig | length > 0 else lookup('env', 'KUBECONFIG') }}"
+  async: 86400
+  poll: 0
+  register: grafana_port_forward
+  when: grafana_proxy_port_open.rc | default(1) | int != 0
+
+- name: Wait until Grafana answers on the proxy
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ grafana_proxy_port }}/api/health"
+    method: GET
+    status_code: [200]
+    validate_certs: false
+  register: grafana_health
+  until: grafana_health.status | default(0) | int == 200
+  retries: 30
+  delay: 2

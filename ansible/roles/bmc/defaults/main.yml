@@ -1,0 +1,4 @@
+---
+ocp_inventory_override: ""
+bmc_skip_bastion: true
+bmc_host_count: 3

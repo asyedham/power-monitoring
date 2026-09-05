@@ -1,0 +1,87 @@
+---
+# Install Kepler Operator + Grafana on OpenShift Virtualization.
+#
+#   pip install kubernetes
+#   ansible-galaxy collection install -r ansible/requirements.yml
+#   export KUBECONFIG=/path/to/kubeconfig
+#   ansible-playbook ansible/install.yml
+#
+# Optional extra vars:
+#   -e kubeconfig=/path/to/kubeconfig
+#   -e lab=performancelab -e lab_cloud=cloud08
+#   -e skip_grafana=true
+#   -e skip_uwm=true
+#   -e grafana_proxy_host=$(hostname -f) -e grafana_proxy_port=3000
+#   -e @ansible/extra-vars.yml
+#
+# Open Grafana in a local browser:
+#   ansible-playbook ansible/grafana-proxy.yml
+
+- name: Install power monitoring
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - kubernetes.core
+  module_defaults:
+    kubernetes.core.k8s:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+    kubernetes.core.k8s_info:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+  pre_tasks:
+    - name: Require Python kubernetes client
+      ansible.builtin.command:
+        argv: ["{{ ansible_playbook_python }}", "-c", "import kubernetes"]
+      changed_when: false
+      register: k8s_py
+      failed_when: false
+      tags: [always]
+
+    - name: Fail if kubernetes client is missing
+      ansible.builtin.fail:
+        msg: >-
+          Python package 'kubernetes' is required.
+          pip install kubernetes && ansible-galaxy collection install -r ansible/requirements.yml
+      when: k8s_py.rc | default(1) != 0
+      tags: [always]
+
+    - name: Require a local connection
+      ansible.builtin.assert:
+        that:
+          - ansible_connection | default('local') in ['local', 'smart'] or inventory_hostname in ['localhost', '127.0.0.1']
+        fail_msg: >-
+          This playbook talks to the cluster API from the machine with oc/kubeconfig,
+          not over SSH. Inventory host is '{{ inventory_hostname }}'
+          (connection={{ ansible_connection | default('unset') }}).
+          Use this repo's ansible/inventory.yml, or: ansible-playbook -i localhost, ansible/install.yml
+      tags: [always]
+  roles:
+    - role: check_cluster
+      tags: [always, check]
+    - role: user_workload_monitoring
+      tags: [uwm]
+      when: not (skip_uwm | bool)
+    - role: bmc
+      tags: [bmc, kepler, collector]
+    - role: kepler
+      tags: [kepler, collector]
+    - role: grafana
+      tags: [grafana]
+      when: not (skip_grafana | bool)
+  post_tasks:
+    - name: Next steps
+      tags: [always]
+      ansible.builtin.debug:
+        msg: |
+          Installed. Give Prometheus ~1 minute to scrape, then:
+
+            oc -n power-monitor logs ds/power-monitor --tail=20
+
+            sum(kepler_platform_watts)
+            sum(kepler_node_cpu_watts)
+            sum(kepler_pod_cpu_watts{pod_name=~"virt-launcher-.*"})
+
+          Capture a labeled run:
+            ansible-playbook ansible/capture.yml -e capture_label=linux-15vm-fio -e capture_duration=1800
+
+          Open Grafana at http://{{ grafana_proxy_host }}:{{ grafana_proxy_port }}/
+            ansible-playbook ansible/grafana-proxy.yml

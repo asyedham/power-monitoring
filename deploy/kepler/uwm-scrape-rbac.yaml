@@ -1,0 +1,60 @@
+# Prometheus user-workload must read the Kepler scrape token and serving CA.
+# Without this, prometheus-operator can bake a stale token into scrape config
+# and kube-rbac-proxy rejects scrapes after the bound token rotates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: power-monitor-secret-reader
+  namespace: power-monitor
+  labels:
+    app.kubernetes.io/part-of: kepler-operator
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["prometheus-user-workload-token"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: power-monitor-secret-reader
+  namespace: power-monitor
+  labels:
+    app.kubernetes.io/part-of: kepler-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: power-monitor-secret-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-user-workload
+    namespace: openshift-user-workload-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: power-monitor-cm-reader
+  namespace: power-monitor
+  labels:
+    app.kubernetes.io/part-of: kepler-operator
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["power-monitor-serving-certs-ca-bundle"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: power-monitor-cm-reader
+  namespace: power-monitor
+  labels:
+    app.kubernetes.io/part-of: kepler-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: power-monitor-cm-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-user-workload
+    namespace: openshift-user-workload-monitoring

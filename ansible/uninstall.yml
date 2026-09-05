@@ -1,0 +1,79 @@
+---
+# Remove Kepler PowerMonitor / operator (and optionally Grafana).
+# Does not disable user-workload monitoring.
+#
+#   ansible-playbook ansible/uninstall.yml
+#   ansible-playbook ansible/uninstall.yml -e remove_grafana=true
+#   ansible-playbook ansible/uninstall.yml -e remove_operator=true
+
+- name: Uninstall power monitoring
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - kubernetes.core
+  vars:
+    remove_grafana: false
+    remove_operator: true
+  module_defaults:
+    kubernetes.core.k8s:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+    kubernetes.core.k8s_info:
+      kubeconfig: "{{ kubeconfig if kubeconfig | length > 0 else omit }}"
+  tasks:
+    - name: Delete PowerMonitor
+      kubernetes.core.k8s:
+        state: absent
+        api_version: kepler.system.sustainable.computing.io/v1alpha1
+        kind: PowerMonitor
+        name: power-monitor
+        wait: true
+        wait_timeout: 120
+
+    - name: Remove Kepler Operator subscription
+      when: remove_operator | bool
+      block:
+        - name: Delete Kepler subscription
+          kubernetes.core.k8s:
+            state: absent
+            api_version: operators.coreos.com/v1alpha1
+            kind: Subscription
+            name: kepler-operator
+            namespace: openshift-operators
+
+        - name: List Kepler CSVs
+          kubernetes.core.k8s_info:
+            api_version: operators.coreos.com/v1alpha1
+            kind: ClusterServiceVersion
+            namespace: openshift-operators
+          register: kepler_csvs
+
+        - name: Delete Kepler CSVs
+          kubernetes.core.k8s:
+            state: absent
+            api_version: operators.coreos.com/v1alpha1
+            kind: ClusterServiceVersion
+            name: "{{ item.metadata.name }}"
+            namespace: openshift-operators
+          loop: "{{ kepler_csvs.resources | default([]) }}"
+          when: "'kepler' in (item.metadata.name | lower)"
+          loop_control:
+            label: "{{ item.metadata.name }}"
+
+    - name: Delete Grafana
+      when: remove_grafana | bool
+      block:
+        - name: Delete Grafana namespace
+          kubernetes.core.k8s:
+            state: absent
+            api_version: v1
+            kind: Namespace
+            name: "{{ grafana_ns }}"
+            wait: true
+            wait_timeout: 120
+
+        - name: Delete Grafana ClusterRoleBinding
+          kubernetes.core.k8s:
+            state: absent
+            api_version: rbac.authorization.k8s.io/v1
+            kind: ClusterRoleBinding
+            name: grafana-cluster-monitoring-view

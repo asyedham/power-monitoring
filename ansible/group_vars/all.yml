@@ -1,0 +1,58 @@
+---
+# Cluster API automation (runs on localhost with oc/kubeconfig).
+# Secrets: prefer extra-vars or Ansible Vault, not git.
+
+project_root: "{{ playbook_dir | dirname }}"
+
+kubeconfig: "/root/mno/kubeconfig"
+
+grafana_ns: grafana
+
+skip_uwm: "{{ lookup('env', 'SKIP_UWM') | default('0', true) }}"
+skip_grafana: "{{ lookup('env', 'SKIP_GRAFANA') | default('0', true) }}"
+
+# QUADS ocpinventory.json (same pattern as jetlag). The bmc role fills
+# BMC user, password, and hosts from the allocation.
+lab: "performancelab"
+lab_cloud: "cloud08"
+# Skip nodes[0] (bastion); use the next 3 hosts (compact control plane).
+bmc_skip_bastion: true
+bmc_host_count: 3
+
+labs:
+  performancelab:
+    quads: quads2.rdu3.labs.perfscale.redhat.com
+  scalelab:
+    quads: quads2.rdu2.scalelab.redhat.com
+
+# Set true to un-censor BMC/Grafana secret tasks (prints passwords).
+debug_secrets: false
+
+grafana_image: "{{ lookup('env', 'GRAFANA_IMAGE') | default('docker.io/grafana/grafana:11.1.5', true) }}"
+grafana_storage_class: "{{ lookup('env', 'GRAFANA_STORAGE_CLASS') | default('ocs-storagecluster-ceph-rbd', true) }}"
+grafana_admin_user: admin
+grafana_admin_password: admin
+
+# Reverse proxy URL is http://<fqdn>:<port>/ (this machine's full hostname by default).
+# Bind 0.0.0.0 so hostname:port is reachable; override GRAFANA_PROXY_HOST if needed.
+grafana_proxy_host: "{{ lookup('env', 'GRAFANA_PROXY_HOST') | default('', true) }}"
+grafana_proxy_port: "{{ lookup('env', 'GRAFANA_PROXY_PORT') | default('3000', true) }}"
+grafana_proxy_bind: "{{ lookup('env', 'GRAFANA_PROXY_BIND') | default('0.0.0.0', true) }}"
+grafana_proxy_scheme: "{{ lookup('env', 'GRAFANA_PROXY_SCHEME') | default('http', true) }}"
+grafana_root_url: "{{ grafana_proxy_scheme }}://{{ grafana_proxy_host }}:{{ grafana_proxy_port }}/"
+grafana_proxy_open_browser: "{{ lookup('env', 'GRAFANA_PROXY_OPEN_BROWSER') | default('true', true) }}"
+
+# Kepler UWM scrape token (prometheus-user-workload-token). Operator default is 168h.
+kepler_uwm_token_ttl: 8760h
+kepler_operator_namespace: ""
+
+kepler_wait_timeout: 180
+grafana_wait_timeout: 180
+uwm_wait_retries: 60
+uwm_wait_delay: 5
+
+# capture.yml
+capture_label: "{{ lookup('env', 'CAPTURE_LABEL') | default('run', true) }}"
+capture_interval: "{{ lookup('env', 'CAPTURE_INTERVAL') | default('10', true) }}"
+capture_duration: "{{ lookup('env', 'CAPTURE_DURATION') | default('0', true) }}"
+capture_output: ""

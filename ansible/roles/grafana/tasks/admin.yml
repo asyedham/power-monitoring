@@ -1,0 +1,74 @@
+---
+# Set Grafana login from grafana_admin_user / grafana_admin_password on every
+# install (Kubernetes secret and Grafana sqlite DB on the PVC).
+
+- name: Require Grafana admin password
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_user | default('') | length > 0
+      - grafana_admin_password | default('') | length > 0
+    fail_msg: >-
+      Set grafana_admin_user and grafana_admin_password in
+      ansible/group_vars/all.yml (for example both to admin).
+
+- name: Apply Grafana admin secret from group_vars
+  kubernetes.core.k8s:
+    state: present
+    force: true
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: grafana-admin
+        namespace: "{{ grafana_ns }}"
+      type: Opaque
+      stringData:
+        admin-user: "{{ grafana_admin_user }}"
+        admin-password: "{{ grafana_admin_password }}"
+  register: grafana_admin_sync
+  failed_when: false
+  no_log: "{{ not (debug_secrets | bool) }}"
+
+- name: Fail if Grafana admin secret was not applied
+  ansible.builtin.fail:
+    msg: >-
+      Failed to apply Secret grafana-admin in namespace {{ grafana_ns }}.
+      Re-run with -e debug_secrets=true on a private terminal to see the API error.
+  when: grafana_admin_sync.failed | default(false)
+
+- name: Wait for Grafana pod before password reset
+  ansible.builtin.command:
+    argv:
+      - oc
+      - rollout
+      - status
+      - deploy/grafana
+      - -n
+      - "{{ grafana_ns }}"
+      - "--timeout={{ grafana_wait_timeout }}s"
+  environment:
+    KUBECONFIG: "{{ kubeconfig if kubeconfig | length > 0 else lookup('env', 'KUBECONFIG') }}"
+  changed_when: false
+
+- name: Reset Grafana admin password in the database
+  ansible.builtin.command:
+    argv:
+      - oc
+      - exec
+      - -n
+      - "{{ grafana_ns }}"
+      - deploy/grafana
+      - --
+      - grafana
+      - cli
+      - admin
+      - reset-admin-password
+      - "{{ grafana_admin_password }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig if kubeconfig | length > 0 else lookup('env', 'KUBECONFIG') }}"
+  register: grafana_pw_reset
+  until: grafana_pw_reset.rc | default(1) | int == 0
+  retries: 12
+  delay: 5
+  changed_when: grafana_pw_reset.rc | default(1) | int == 0
+  no_log: "{{ not (debug_secrets | bool) }}"

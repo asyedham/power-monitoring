@@ -1,0 +1,20 @@
+# Copy to extra-vars.yml (gitignored) or pass with -e @ansible/extra-vars.example.yml
+# ansible-playbook ansible/install.yml -e @ansible/extra-vars.yml
+#
+# BMC user, password, and hosts are downloaded from QUADS ocpinventory.json:
+#   http://{{ labs[lab].quads }}/instack/{{ lab_cloud }}_ocpinventory.json
+lab: performancelab
+lab_cloud: cloud08
+# ocp_inventory_override: /path/to/ocpinventory.json
+# Un-censor BMC/Grafana task errors (prints passwords — private terminal only)
+# debug_secrets: true
+# skip_grafana: false
+# skip_uwm: false
+# grafana_storage_class: ocs-storagecluster-ceph-rbd
+# Reverse proxy as http://<fqdn>:3000/
+# grafana_proxy_host: aa37-h19-000-r740xd.example.com
+# grafana_proxy_port: 3000
+# grafana_proxy_bind: 0.0.0.0
+# Then: ansible-playbook ansible/grafana-proxy.yml
+# Kepler UWM scrape token lifetime (operator flag --exp.uwm.token.ttl)
+# kepler_uwm_token_ttl: 8760h

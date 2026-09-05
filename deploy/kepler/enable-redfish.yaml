@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: enable-redfish
+  namespace: power-monitor
+  labels:
+    app.kubernetes.io/part-of: kepler-operator
+data:
+  config.yaml: |
+    experimental:
+      platform:
+        redfish:
+          enabled: true
+          nodeName: ""
+          configFile: /etc/kepler/secrets/redfish/redfish.yaml
+          httpTimeout: 5s

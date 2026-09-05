@@ -1,0 +1,55 @@
+---
+- name: Read cluster-monitoring-config
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: cluster-monitoring-config
+    namespace: openshift-monitoring
+  register: monitoring_cm
+
+- name: Build enableUserWorkload config.yaml
+  ansible.builtin.set_fact:
+    uwm_config_yaml: >-
+      {{
+        (
+          monitoring_cm.resources[0].data['config.yaml']
+          if monitoring_cm.resources | default([]) | length > 0
+          else ''
+        )
+        | regex_replace('enableUserWorkload:\\s*\\S+', 'enableUserWorkload: true')
+      }}
+
+- name: Prepend enableUserWorkload when missing
+  ansible.builtin.set_fact:
+    uwm_config_yaml: "enableUserWorkload: true\n{{ uwm_config_yaml }}"
+  when: "'enableUserWorkload:' not in uwm_config_yaml"
+
+- name: Apply cluster-monitoring-config
+  kubernetes.core.k8s:
+    state: present
+    apply: true
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: cluster-monitoring-config
+        namespace: openshift-monitoring
+      data:
+        config.yaml: "{{ uwm_config_yaml }}"
+
+- name: Wait for user-workload Prometheus
+  kubernetes.core.k8s_info:
+    api_version: monitoring.coreos.com/v1
+    kind: Prometheus
+    name: prometheus-user-workload
+    namespace: openshift-user-workload-monitoring
+  register: uwm_prom
+  until: uwm_prom.resources | default([]) | length > 0
+  retries: "{{ uwm_wait_retries | int }}"
+  delay: "{{ uwm_wait_delay | int }}"
+  failed_when: false
+
+- name: Warn if user-workload Prometheus is slow
+  ansible.builtin.debug:
+    msg: User-workload Prometheus is not ready yet; ServiceMonitor will attach later
+  when: uwm_prom.resources | default([]) | length == 0

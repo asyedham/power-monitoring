@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: grafana
+  labels:
+    app.kubernetes.io/name: grafana
+data:
+  thanos.yaml: |
+    apiVersion: 1
+    deleteDatasources:
+      - name: Thanos
+        orgId: 1
+    datasources:
+      - name: Thanos
+        uid: thanos
+        type: prometheus
+        access: proxy
+        url: https://thanos-querier.openshift-monitoring.svc:9091
+        isDefault: true
+        editable: true
+        jsonData:
+          httpMethod: GET
+          timeInterval: 15s
+          tlsSkipVerify: true
+          prometheusType: Thanos
+          httpHeaderName1: Authorization
+        secureJsonData:
+          httpHeaderValue1: Bearer $__file{/var/run/secrets/kubernetes.io/serviceaccount/token}

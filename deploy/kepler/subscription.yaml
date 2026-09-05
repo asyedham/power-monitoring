@@ -1,0 +1,13 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: kepler-operator
+  namespace: openshift-operators
+  labels:
+    app.kubernetes.io/part-of: power-monitoring
+spec:
+  channel: alpha
+  name: kepler-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

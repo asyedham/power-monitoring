@@ -1,0 +1,30 @@
+---
+- name: Require oc
+  ansible.builtin.command: oc whoami
+  register: oc_whoami
+  changed_when: false
+  failed_when: oc_whoami.rc != 0
+
+- name: Show authenticated user
+  ansible.builtin.debug:
+    msg: "Logged in as {{ oc_whoami.stdout }}"
+
+- name: Check OpenShift Virtualization CRD
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: virtualmachineinstances.kubevirt.io
+  register: virt_crd
+  failed_when: false
+
+- name: Warn if Virtualization is missing
+  ansible.builtin.debug:
+    msg: >-
+      kubevirt CRD not found. Collector will still export node RAPL/platform watts.
+      Install OpenShift Virtualization for virt-launcher attribution and VMI counts.
+  when: virt_crd.resources | default([]) | length == 0
+
+- name: Confirm Virtualization API
+  ansible.builtin.debug:
+    msg: OpenShift Virtualization API is present
+  when: virt_crd.resources | default([]) | length > 0

@@ -1,0 +1,83 @@
+---
+# Download QUADS ocpinventory.json and set BMC user, password, and hosts
+# so they do not need to be entered by hand (same pattern as jetlag).
+
+- name: Require lab and lab_cloud (or ocp_inventory_override)
+  ansible.builtin.assert:
+    that:
+      - (ocp_inventory_override | default('') | string | length > 1)
+        or (lab | default('') | string | length > 0 and lab_cloud | default('') | string | length > 0)
+    fail_msg: >-
+      Set lab and lab_cloud in ansible/group_vars/all.yml
+      (for example lab=performancelab and lab_cloud=cloud08) so BMC user,
+      password, and hosts can be downloaded from QUADS ocpinventory.
+      Or set ocp_inventory_override to a URL or local file.
+
+- name: Set ocp inventory download url from lab wiki - scalelab and performancelab
+  ansible.builtin.set_fact:
+    ocp_inventory_url: "http://{{ labs[lab]['quads'] }}/instack/{{ lab_cloud }}_ocpinventory.json"
+  when: ocp_inventory_override | string | length < 1 and (lab == 'scalelab' or lab == 'performancelab')
+
+- name: Set ocp inventory download url to override
+  ansible.builtin.set_fact:
+    ocp_inventory_url: "{{ ocp_inventory_override }}"
+  when: ocp_inventory_override | string | length > 1
+
+- name: Require ocp inventory URL
+  ansible.builtin.assert:
+    that:
+      - ocp_inventory_url | default('') | length > 0
+    fail_msg: >-
+      Could not build ocpinventory URL. lab must be scalelab or performancelab
+      (got '{{ lab }}'), or set ocp_inventory_override.
+
+- name: Download ocpinventory.json
+  ansible.builtin.uri:
+    url: "{{ ocp_inventory_url }}"
+    return_content: true
+  register: ocpinventory
+  when: ocp_inventory_url | regex_search('^http')
+
+- name: Load {{ ocp_inventory_url }}
+  ansible.builtin.set_fact:
+    ocpinventory:
+      json: "{{ lookup('file', ocp_inventory_url) | from_json }}"
+  when: "'skipped' in ocpinventory"
+
+- name: Set inventory variables
+  ansible.builtin.set_fact:
+    bastion_machine: "{{ ocpinventory.json.nodes[0].pm_addr | replace('mgmt-', '') }}"
+    bmc_user: "{{ ocpinventory.json.nodes[0].pm_user }}"
+    bmc_password: "{{ ocpinventory.json.nodes[0].pm_password }}"
+  no_log: "{{ not (debug_secrets | bool) }}"
+
+- name: Require bastion plus 3 BMC hosts in inventory
+  ansible.builtin.assert:
+    that:
+      - ocpinventory.json.nodes | length >= 4
+    fail_msg: >-
+      Need at least 4 machines in {{ ocp_inventory_url }}
+      (1 bastion excluded + next 3 hosts). Found
+      {{ ocpinventory.json.nodes | length }}.
+
+- name: Build BMC host map from ocpinventory (skip first, next 3)
+  ansible.builtin.set_fact:
+    redfish_docs: "{{ ocpinventory.json.nodes | ocpinventory_to_redfish(bmc_user, bmc_password, true, bmc_skip_bastion | bool, bmc_host_count | int) }}"
+  no_log: "{{ not (debug_secrets | bool) }}"
+
+- name: Require BMC hosts from inventory
+  ansible.builtin.assert:
+    that:
+      - bmc_user | default('') | length > 0
+      - bmc_password | default('') | length > 0
+      - (redfish_docs.count | default(0) | int) > 0
+    fail_msg: >-
+      Inventory {{ ocp_inventory_url }} did not yield BMC user, password, and hosts.
+      Check lab={{ lab }} lab_cloud={{ lab_cloud }} and that ocpinventory.json has nodes.
+
+- name: Show BMC details loaded from inventory
+  ansible.builtin.debug:
+    msg: >-
+      BMC user={{ bmc_user }}, {{ redfish_docs.count }} host(s),
+      bastion={{ bastion_machine }} from {{ ocp_inventory_url }}.
+      Password is not shown.

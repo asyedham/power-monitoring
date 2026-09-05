@@ -1,0 +1,10 @@
+run_id,phase,node,watts,sample_method,sample_time,vm_count_on_node,notes
+run-001,idle,worker-0,,median-5min,2026-08-11T10:00:00Z,0,no VMs on node
+run-001,idle,worker-1,,median-5min,2026-08-11T10:00:00Z,0,
+run-001,idle,TOTAL,,sum,,0,sum of node watts
+run-001,vms_up,worker-0,,median-5min,2026-08-11T10:20:00Z,,VMs Running; no FIO/DB yet
+run-001,vms_up,worker-1,,median-5min,2026-08-11T10:20:00Z,,
+run-001,vms_up,TOTAL,,sum,,,
+run-001,workload,worker-0,,median-steady,2026-08-11T11:00:00Z,,steady-state FIO/DB window
+run-001,workload,worker-1,,median-steady,2026-08-11T11:00:00Z,,
+run-001,workload,TOTAL,,sum,,,

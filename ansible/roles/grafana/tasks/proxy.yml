@@ -1,0 +1,59 @@
+---
+# Point Grafana at http://<fqdn>:<port>/ for local reverse proxy.
+- name: Detect this machine's full hostname for reverse proxy
+  ansible.builtin.command:
+    argv: ["hostname", "-f"]
+  register: grafana_detected_hostname
+  changed_when: false
+  when: grafana_proxy_host | default('') | length == 0
+
+- name: Set reverse-proxy host to hostname
+  ansible.builtin.set_fact:
+    grafana_proxy_host: "{{ grafana_proxy_host if grafana_proxy_host | default('') | length > 0 else grafana_detected_hostname.stdout | trim }}"
+
+- name: Compute Grafana reverse-proxy root URL
+  ansible.builtin.set_fact:
+    grafana_root_url: "{{ grafana_proxy_scheme }}://{{ grafana_proxy_host }}:{{ grafana_proxy_port }}/"
+
+- name: Set Grafana reverse-proxy server env
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    name: grafana
+    namespace: "{{ grafana_ns }}"
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: grafana
+                env:
+                  - name: GF_SERVER_ROOT_URL
+                    value: "{{ grafana_root_url }}"
+                  - name: GF_SERVER_DOMAIN
+                    value: "{{ grafana_proxy_host }}"
+                  - name: GF_SERVER_HTTP_ADDR
+                    value: "0.0.0.0"
+                  - name: GF_SERVER_HTTP_PORT
+                    value: "3000"
+                  - name: GF_SERVER_SERVE_FROM_SUB_PATH
+                    value: "false"
+                  - name: GF_SECURITY_COOKIE_SECURE
+                    value: "{{ 'true' if grafana_proxy_scheme == 'https' else 'false' }}"
+                  - name: GF_SECURITY_CSRF_TRUSTED_ORIGINS
+                    value: "{{ grafana_proxy_host }}:{{ grafana_proxy_port }}"
+                  - name: GF_LIVE_ALLOWED_ORIGINS
+                    value: "{{ grafana_root_url.rstrip('/') }}"
+
+- name: Wait for Grafana after reverse-proxy patch
+  ansible.builtin.command:
+    argv:
+      - oc
+      - rollout
+      - status
+      - deploy/grafana
+      - -n
+      - "{{ grafana_ns }}"
+      - "--timeout={{ grafana_wait_timeout }}s"
+  changed_when: false
+  failed_when: false

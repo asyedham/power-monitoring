@@ -1,6 +1,6 @@
 ---
 # Download QUADS ocpinventory.json and set BMC user, password, and hosts
-# so they do not need to be entered by hand (same pattern as jetlag).
+# so they do not need to be entered by hand
 
 - name: Require lab and lab_cloud (or ocp_inventory_override)
   ansible.builtin.assert:

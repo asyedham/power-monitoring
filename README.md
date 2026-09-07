@@ -204,26 +204,9 @@ sum(kepler_pod_cpu_watts{pod_name=~"virt-launcher-.*"})
 
 `kepler_platform_watts` needs BMC Redfish (the `bmc` role). RAPL / virt-launcher metrics still work without it.
 
-## 7. Capture a labeled CSV
+Create VMs with your usual path; this repo does not create them. Grafana shows virt-launcher RAPL and Running VMI count when VMs exist.
 
-```bash
-ansible-playbook ansible/capture.yml \
-  -e capture_label=linux-15vm-fio \
-  -e capture_duration=1800
-```
-
-- `capture_duration` is required (seconds)
-- `capture_interval` defaults to `10`
-- Output defaults to `power-<timestamp>-<label>.csv` in the current directory
-
-```bash
-ansible-playbook ansible/capture.yml \
-  -e capture_label=run \
-  -e capture_duration=60 \
-  -e capture_output=/tmp/power.csv
-```
-
-## 8. Uninstall
+## 7. Uninstall
 
 Kepler only (Grafana stays):
 
@@ -245,7 +228,6 @@ Default `remove_grafana` is `false`. A Kepler-only uninstall leaves Grafana runn
 ansible/
   install.yml           # full install
   grafana-proxy.yml     # hostname:port access
-  capture.yml           # CSV sample of platform watts
   uninstall.yml
   group_vars/all.yml    # lab, cloud, Grafana StorageClass, kubeconfig
   roles/

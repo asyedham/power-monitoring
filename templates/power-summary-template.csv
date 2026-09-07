@@ -1,5 +1,0 @@
-run_id,date,cluster,storage_backend,os,vm_count,vcpu_per_vm,ram_gb_per_vm,data_disk_gb,workload,workload_detail,idle_W,vms_up_W,load_W,delta_vms_W,delta_load_W,watts_per_vm,source,notes
-run-001,2026-08-11,ocp-lab,odf-rbd,linux,15,4,8,100,fio,randrw-4k-iodepth32,,,,,,,,prometheus+ipmi,example row — replace with measured medians
-run-002,2026-08-11,ocp-lab,odf-rbd,linux,30,4,8,100,fio,randrw-4k-iodepth32,,,,,,,,prometheus+ipmi,
-run-003,2026-08-11,ocp-lab,odf-rbd,windows,15,4,8,100,fio,randrw-4k-iodepth32,,,,,,,,prometheus+ipmi,
-run-004,2026-08-11,ocp-lab,odf-rbd,linux,15,8,16,100,hammerdb,tpcc-users64,,,,,,,,prometheus+ipmi,

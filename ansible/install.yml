@@ -80,8 +80,5 @@
             sum(kepler_node_cpu_watts)
             sum(kepler_pod_cpu_watts{pod_name=~"virt-launcher-.*"})
 
-          Capture a labeled run:
-            ansible-playbook ansible/capture.yml -e capture_label=linux-15vm-fio -e capture_duration=1800
-
           Open Grafana at http://{{ grafana_proxy_host }}:{{ grafana_proxy_port }}/
             ansible-playbook ansible/grafana-proxy.yml

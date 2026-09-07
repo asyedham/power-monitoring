@@ -11,8 +11,6 @@ grafana_ns: grafana
 skip_uwm: "{{ lookup('env', 'SKIP_UWM') | default('0', true) }}"
 skip_grafana: "{{ lookup('env', 'SKIP_GRAFANA') | default('0', true) }}"
 
-# QUADS ocpinventory.json (same pattern as jetlag). The bmc role fills
-# BMC user, password, and hosts from the allocation.
 lab: "lab"
 lab_cloud: "cloud00"
 # Skip nodes[0] (bastion); use the next 3 hosts (compact control plane).
@@ -50,9 +48,3 @@ kepler_wait_timeout: 180
 grafana_wait_timeout: 180
 uwm_wait_retries: 60
 uwm_wait_delay: 5
-
-# capture.yml
-capture_label: "{{ lookup('env', 'CAPTURE_LABEL') | default('run', true) }}"
-capture_interval: "{{ lookup('env', 'CAPTURE_INTERVAL') | default('10', true) }}"
-capture_duration: "{{ lookup('env', 'CAPTURE_DURATION') | default('0', true) }}"
-capture_output: ""

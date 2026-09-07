@@ -1,7 +1,6 @@
 # Local results and secrets — never commit these
 power-results/
 *.csv
-!templates/*.csv
 grafana.db
 *.kubeconfig
 kubeconfig

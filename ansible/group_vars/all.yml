@@ -13,8 +13,8 @@ skip_grafana: "{{ lookup('env', 'SKIP_GRAFANA') | default('0', true) }}"
 
 # QUADS ocpinventory.json (same pattern as jetlag). The bmc role fills
 # BMC user, password, and hosts from the allocation.
-lab: "performancelab"
-lab_cloud: "cloud08"
+lab: "lab"
+lab_cloud: "cloud00"
 # Skip nodes[0] (bastion); use the next 3 hosts (compact control plane).
 bmc_skip_bastion: true
 bmc_host_count: 3

@@ -596,7 +596,7 @@
     },
     {
       "type": "row",
-      "title": "Grafana pod overhead",
+      "title": "Grafana Pod Overhead",
       "id": 20,
       "gridPos": {
         "h": 1,
@@ -618,7 +618,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Observer cost of this Grafana instance (`namespace=grafana`). Power is **RAPL (Kepler)** (CPU package + DRAM) attributed to the pod \u2014 not BMC chassis watts. Throttle > 0 means the CPU limit is biting."
+        "content": "Observer cost of this Grafana instance (`namespace=grafana`). Power is **RAPL (Kepler)** (CPU package + DRAM) attributed to the pod \u2014 not BMC chassis watts. Throttle is the share of CFS periods that hit the 1 CPU limit. Small spikes are normal; a high, steady value means the limit is constraining Grafana."
       }
     },
     {
@@ -989,5 +989,5 @@
   "timezone": "browser",
   "title": "OpenShift Virtualization Power Monitoring Dashboard",
   "uid": "ioscale-power",
-  "version": 16
+  "version": 18
 }

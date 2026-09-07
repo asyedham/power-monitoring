@@ -44,7 +44,7 @@ Watt panels in **Power Consumption** use one naming pattern: **(Redfish)** for B
 
 VM RAPL will stay near zero if there are no Running virt-launchers, or if the query used the wrong label (`pod` instead of `pod_name`).
 
-## Grafana pod overhead
+## Grafana Pod Overhead
 
 This row is the **observer** (namespace `grafana`, container `grafana`). It is not cluster or VM power.
 
@@ -55,7 +55,7 @@ This row is the **observer** (namespace `grafana`, container `grafana`). It is n
 | RAPL (Kepler) | `kepler_pod_cpu_watts` for the Grafana pod | RAPL watts attributed to Grafana — not BMC chassis watts |
 | RAPL package vs DRAM (Kepler) | same, split by `zone` | CPU package vs DRAM share of that RAPL |
 | Restarts | kube-state-metrics restart count | `0` is healthy; a bump is a crash, OOM, or rollout |
-| CPU throttled | CFS throttled periods / all periods | Fraction of time Grafana hit its CPU limit |
+| CPU throttled | CFS throttled periods / all periods | Share of CFS periods that hit the 1 CPU limit. Small spikes are normal; a high, steady value means the limit is constraining Grafana |
 
 ## Files
 
